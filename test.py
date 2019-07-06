@@ -5,6 +5,8 @@ import cv2
 import json
 import glob
 
+import sys
+
 from Mask.config import Config
 import Mask.utils as utils
 import Mask.model as modellib
@@ -48,20 +50,27 @@ model.load_weights(MODEL_PATH, by_name=True)
 # background + (malignant , benign)
 class_names = ["BG", "malignant", "benign"]
 
-# find the largest number of image that you download
-all_desc_path = glob.glob(path_data + "Descriptions/ISIC_*")
-for filename in os.listdir(path_data+"Descriptions/"):
-    data = json.load(open(path_data+"/Descriptions/"+filename))
-    img = cv2.imread(path_data+"Images/"+filename+".jpg")
+if not sys.argv[1]:
+    # find the largest number of image that you download
+    all_desc_path = glob.glob(path_data + "Descriptions/ISIC_*")
+    for filename in os.listdir(path_data+"Descriptions/"):
+        data = json.load(open(path_data+"/Descriptions/"+filename))
+        img = cv2.imread(path_data+"Images/"+filename+".jpg")
+        img = cv2.resize(img, (128, 128))
+
+        if not img:
+            continue
+
+        # ground truth of the class
+        print(data["meta"]["clinical"]["benign_malignant"])
+        
+        # predict the mask, bounding box and class of the image
+        r = model.detect([img])[0]
+        visualize.display_instances(img, r['rois'], r['masks'], r['class_ids'],
+                                    class_names, r['scores'])
+else:
+    img = cv2.imread(sys.arv[1])
     img = cv2.resize(img, (128, 128))
-
-    if not img:
-        continue
-
-    # ground truth of the class
-    print(data["meta"]["clinical"]["benign_malignant"])
-    
-    # predict the mask, bounding box and class of the image
     r = model.detect([img])[0]
     visualize.display_instances(img, r['rois'], r['masks'], r['class_ids'],
-                                class_names, r['scores'])
+                                    class_names, r['scores'])

@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import json
-import os
+import os, sys
 import matplotlib.pyplot as plt
 
 
@@ -14,6 +14,8 @@ import Mask.visualize as visualize
 dir_path = os.path.dirname(os.path.realpath(__file__))
 MODEL_DIR = dir_path + "/models/"
 COCO_MODEL_PATH = dir_path + "/Mask/mask_rcnn_coco.h5"
+IMG_SIZE = 64
+
 if os.path.isfile(COCO_MODEL_PATH) == False:
     raise Exception("You have to download mask_rcnn_coco.h5 inside Mask folder \n\
     You can find it here: https://github.com/matterport/Mask_RCNN/releases/download/v2.0/mask_rcnn_coco.h5")
@@ -27,13 +29,13 @@ class MolesConfig(Config):
     GPU_COUNT = 1 # put 2 or more if you are 1 or more gpu
     IMAGES_PER_GPU = 1 # if you are a gpu you are choose how many image to process per gpu
     NUM_CLASSES = 1 + 2  # background + (malignant , benign)
-    IMAGE_MIN_DIM = 128
-    IMAGE_MAX_DIM = 128
+    IMAGE_MIN_DIM = IMG_SIZE
+    IMAGE_MAX_DIM = IMG_SIZE
 
     # hyperparameter
-    LEARNING_RATE = 0.001
-    STEPS_PER_EPOCH = 100
-    VALIDATION_STEPS = 5
+    LEARNING_RATE = 0.01
+    STEPS_PER_EPOCH = 10
+    VALIDATION_STEPS = 10
 
 class Metadata:
     ''' 
@@ -88,25 +90,44 @@ class MoleDataset(utils.Dataset):
 config = MolesConfig()
 all_info = []
 
-# path of Data that contain Descriptions and Images
-path_data = input("Insert the path of Data [ Link /home/../ISIC-Archive-Downloader/Data/ ] : ")
-if not os.path.exists(path_data):
-    raise Exception(path_data + " Does not exists")
+config.display()
 
+# path of Data that contain Descriptions and Images
+if os.path.exists("./Data/"):
+    path_data = "./Data/"
+    print("Found Data in %s" % (os.path.abspath("./Data/")))
+else:
+    path_data = input("Insert the path of Data [ Link /home/../ISIC-Archive-Downloader/Data/ ] : ")
+    if not os.path.exists(path_data):
+        raise Exception(path_data + " Does not exists")
+
+warning = True
 # Load all the images, mask and description of the Dataset
 for filename in os.listdir(path_data+"Descriptions/"):
-    data = json.load(open(path_data+"/Descriptions/"+filename))
-    img = cv2.imread(path_data+"Images/"+filename+".jpg")
-    img = cv2.resize(img, (128, 128))
-    mask = cv2.imread(path_data+"Segmentation/"+filename+"_expert.png")
-    mask = cv2.resize(mask, (128, 128))
+    if len(filename) > 12:
+        if warning:
+            print("Maybe the filename is wrong, should be something like: ISIC_0000000 , not ISIC_0000000.json or something else")
+            print("Now the filename is "+ filename[:12]+ " check that is correct")
+            warning = False
+        filename = filename[:12]
 
-    if not mask or not img:
+    data = json.load(open(path_data+"/Descriptions/"+filename))
+    img = cv2.imread(path_data+"Images/"+filename+".jpeg")
+    # print(img)
+    if img is None:
         continue
+    img = cv2.resize(img, (IMG_SIZE, IMG_SIZE))
+    mask = cv2.imread(path_data+"Segmentation/"+filename+"_segmentation.png")
+    if mask is None:
+        continue
+    mask = cv2.resize(mask, (IMG_SIZE, IMG_SIZE))
     
     info = Metadata(data["meta"], data["dataset"], img, mask)
     all_info.append(info)
+    if len(all_info)>300:
+        break
 
+# print(config)
 
 # split the data into train and test
 percentual = (len(all_info)*30)//100
@@ -118,38 +139,45 @@ del all_info
 # processing the data
 dataset_train = MoleDataset()
 dataset_train.load_shapes(train_data, config.IMAGE_SHAPE[0], config.IMAGE_SHAPE[1])
-dataset_train.prepare()
+dataset_train.prepare() 
+
 dataset_val = MoleDataset()
 dataset_val.load_shapes(val_data, config.IMAGE_SHAPE[0], config.IMAGE_SHAPE[1])
 dataset_val.prepare()
 del train_data
 del val_data
 
+
 # Show some random images to verify that everything is ok
 image_ids = np.random.choice(dataset_train.image_ids, 3)
 for image_id in image_ids:
     image = dataset_train.load_image(image_id)
     mask, class_ids = dataset_train.load_mask(image_id)
-    visualize.display_top_masks(image, mask, class_ids, dataset_train.class_names)
+    # visualize.display_top_masks(image, mask, class_ids, dataset_train.class_names)
 
 # Create the MaskRCNN model
+print("Creating Model")
 model = modellib.MaskRCNN(mode="training", config=config, model_dir=MODEL_DIR)
-
+# sys.exit()
 # Use as start point the coco model
+print("Loading COCO weights file")
 model.load_weights(COCO_MODEL_PATH, by_name=True,
                    exclude=["mrcnn_class_logits", "mrcnn_bbox_fc",
                             "mrcnn_bbox", "mrcnn_mask"])
 
 # Train the model on the train dataset
 # First only the header layers
+print("Begin Model Training - Header Layers")
 model.train(dataset_train, dataset_val,
             learning_rate=config.LEARNING_RATE,
-            epochs=30,
+            epochs=3,
             layers='heads')
+print("End Model Training - Header Layers")
 # After all the layers 
+print("Begin Model Training - Remaining Layers")
 model.train(dataset_train, dataset_val,
             learning_rate=config.LEARNING_RATE/10,
-            epochs=90,
+            epochs=9,
             layers="all")
 
 print("Trained finished!")
