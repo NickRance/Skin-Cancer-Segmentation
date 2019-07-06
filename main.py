@@ -14,7 +14,7 @@ import Mask.visualize as visualize
 dir_path = os.path.dirname(os.path.realpath(__file__))
 MODEL_DIR = dir_path + "/models/"
 COCO_MODEL_PATH = dir_path + "/Mask/mask_rcnn_coco.h5"
-IMG_SIZE = 64
+IMG_SIZE = 128
 
 if os.path.isfile(COCO_MODEL_PATH) == False:
     raise Exception("You have to download mask_rcnn_coco.h5 inside Mask folder \n\
@@ -26,16 +26,16 @@ class MolesConfig(Config):
         Contain the configuration for the dataset + those in Config
     '''
     NAME = "moles"
-    GPU_COUNT = 1 # put 2 or more if you are 1 or more gpu
+    GPU_COUNT = 4 # put 2 or more if you are 1 or more gpu
     IMAGES_PER_GPU = 1 # if you are a gpu you are choose how many image to process per gpu
     NUM_CLASSES = 1 + 2  # background + (malignant , benign)
     IMAGE_MIN_DIM = IMG_SIZE
     IMAGE_MAX_DIM = IMG_SIZE
 
     # hyperparameter
-    LEARNING_RATE = 0.01
-    STEPS_PER_EPOCH = 10
-    VALIDATION_STEPS = 10
+    LEARNING_RATE = 0.001
+    STEPS_PER_EPOCH = 100
+    VALIDATION_STEPS = 5
 
 class Metadata:
     ''' 
@@ -124,8 +124,6 @@ for filename in os.listdir(path_data+"Descriptions/"):
     
     info = Metadata(data["meta"], data["dataset"], img, mask)
     all_info.append(info)
-    if len(all_info)>300:
-        break
 
 # print(config)
 
@@ -170,14 +168,14 @@ model.load_weights(COCO_MODEL_PATH, by_name=True,
 print("Begin Model Training - Header Layers")
 model.train(dataset_train, dataset_val,
             learning_rate=config.LEARNING_RATE,
-            epochs=3,
+            epochs=30,
             layers='heads')
 print("End Model Training - Header Layers")
 # After all the layers 
 print("Begin Model Training - Remaining Layers")
 model.train(dataset_train, dataset_val,
             learning_rate=config.LEARNING_RATE/10,
-            epochs=9,
+            epochs=90,
             layers="all")
 
 print("Trained finished!")
