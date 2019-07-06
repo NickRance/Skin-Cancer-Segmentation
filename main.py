@@ -117,10 +117,11 @@ for filename in os.listdir(path_data+"Descriptions/"):
     if img is None:
         continue
     img = cv2.resize(img, (IMG_SIZE, IMG_SIZE))
-    # mask = cv2.imread(path_data+"Segmentation/"+filename+"_segmentation.png")
     mask = cv2.imread(path_data+"Segmentation/"+filename+"_novice.png")
     if mask is None:
         mask = cv2.imread(path_data+"Segmentation/"+filename+"_expert.png")
+    if (mask is None):
+        mask = cv2.imread(path_data+"Segmentation/"+filename+"_segmentation.png")
     if mask is None:
         continue
     mask = cv2.resize(mask, (IMG_SIZE, IMG_SIZE))
